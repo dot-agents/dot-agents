@@ -205,26 +205,32 @@ cmd_add() {
 
   # Check for existing files that would be replaced (root-level only)
   check_existing_config_files "$project_path"
-  local existing_files=("${_CHECK_EXISTING_FILES[@]}")
+  local existing_files=()
+  [ ${#_CHECK_EXISTING_FILES[@]} -gt 0 ] && existing_files=("${_CHECK_EXISTING_FILES[@]}")
 
   # Exhaustively scan for all AI config files in the repo
   scan_existing_ai_configs "$project_path"
-  local all_ai_configs=("${_SCAN_AI_CONFIGS[@]}")
+  local all_ai_configs=()
+  [ ${#_SCAN_AI_CONFIGS[@]} -gt 0 ] && all_ai_configs=("${_SCAN_AI_CONFIGS[@]}")
 
   # Separate files that will be replaced vs. discovered elsewhere
   local discovered_elsewhere=()
-  for config in "${all_ai_configs[@]}"; do
-    local is_root_file=false
-    for root_file in "${existing_files[@]}"; do
-      if [ "$config" = "$root_file" ]; then
-        is_root_file=true
-        break
+  if [ ${#all_ai_configs[@]} -gt 0 ]; then
+    for config in "${all_ai_configs[@]}"; do
+      local is_root_file=false
+      if [ ${#existing_files[@]} -gt 0 ]; then
+        for root_file in "${existing_files[@]}"; do
+          if [ "$config" = "$root_file" ]; then
+            is_root_file=true
+            break
+          fi
+        done
+      fi
+      if [ "$is_root_file" = false ]; then
+        discovered_elsewhere+=("$config")
       fi
     done
-    if [ "$is_root_file" = false ]; then
-      discovered_elsewhere+=("$config")
-    fi
-  done
+  fi
 
   # Show files that will be replaced
   if [ ${#existing_files[@]} -gt 0 ]; then
