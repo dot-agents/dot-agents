@@ -204,12 +204,12 @@ cmd_add() {
     "Other agents use symlinks for flexibility."
 
   # Check for existing files that would be replaced (root-level only)
-  local existing_files=()
-  check_existing_config_files "$project_path" existing_files
+  check_existing_config_files "$project_path"
+  local existing_files=("${_CHECK_EXISTING_FILES[@]}")
 
   # Exhaustively scan for all AI config files in the repo
-  local all_ai_configs=()
-  scan_existing_ai_configs "$project_path" all_ai_configs
+  scan_existing_ai_configs "$project_path"
+  local all_ai_configs=("${_SCAN_AI_CONFIGS[@]}")
 
   # Separate files that will be replaced vs. discovered elsewhere
   local discovered_elsewhere=()
@@ -443,10 +443,11 @@ check_deprecated_formats() {
 #   opencode_create_links() from platforms/opencode.sh
 
 # Check for existing config files that would be replaced by linking
-# Usage: check_existing_config_files "/path/to/project" array_name
+# Sets global _CHECK_EXISTING_FILES array with results
+# Usage: check_existing_config_files "/path/to/project"
 check_existing_config_files() {
   local project_path="$1"
-  local -n result_array="$2"
+  _CHECK_EXISTING_FILES=()
 
   # Root-level files that would be directly replaced
   local root_files=(
@@ -468,21 +469,21 @@ check_existing_config_files() {
       if [ -d "$file" ]; then
         # Check for files inside directories
         for subfile in "$file"/*; do
-          [ -e "$subfile" ] && result_array+=("$subfile")
+          [ -e "$subfile" ] && _CHECK_EXISTING_FILES+=("$subfile")
         done
       else
-        result_array+=("$file")
+        _CHECK_EXISTING_FILES+=("$file")
       fi
     fi
   done
 }
 
 # Exhaustively scan for AI agent config files throughout the repo
-# Returns files that might indicate existing AI agent configurations
-# Usage: scan_existing_ai_configs "/path/to/project" array_name
+# Sets global _SCAN_AI_CONFIGS array with results
+# Usage: scan_existing_ai_configs "/path/to/project"
 scan_existing_ai_configs() {
   local project_path="$1"
-  local -n result_array="$2"
+  _SCAN_AI_CONFIGS=()
 
   # Use find to locate files, excluding common directories
   local exclude_dirs=".git node_modules vendor dist build __pycache__ .venv venv"
@@ -532,7 +533,7 @@ scan_existing_ai_configs() {
   # Search for each pattern
   for pattern in "${patterns[@]}"; do
     while IFS= read -r -d '' file; do
-      result_array+=("$file")
+      _SCAN_AI_CONFIGS+=("$file")
     done < <(find "$project_path" \
       -path '*/.git/*' -prune -o \
       -path '*/node_modules/*' -prune -o \
@@ -547,7 +548,7 @@ scan_existing_ai_configs() {
 
   # Also check for glob patterns that need special handling
   while IFS= read -r -d '' file; do
-    result_array+=("$file")
+    _SCAN_AI_CONFIGS+=("$file")
   done < <(find "$project_path" \
     -path '*/.git/*' -prune -o \
     -path '*/node_modules/*' -prune -o \
