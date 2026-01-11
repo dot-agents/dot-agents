@@ -39,6 +39,8 @@ ${BOLD}CORE COMMANDS${NC}
     status            Show managed projects and their status
     doctor            Check health of dot-agents installation
     hooks             Manage Claude Code hooks configuration
+    skills            Manage skills (list, new, edit, migrate)
+    link              Set up symlinks to platform locations
     audit             Show which configs are applied where
     redundancy        Check for duplicate/redundant rules
     migrate           Migrate deprecated config formats

@@ -31,7 +31,11 @@ ${BOLD}CREATED STRUCTURE${NC}
     │   └── global/           # Global settings
     ├── mcp/
     │   └── global/           # Global MCP configs
-    ├── commands/             # Custom commands
+    ├── skills/
+    │   └── global/           # Global skills (directory-based)
+    │       ├── agent-start/SKILL.md
+    │       ├── agent-handoff/SKILL.md
+    │       └── self-review/SKILL.md
     ├── scripts/              # Utility scripts
     └── local/                # Machine-specific (gitignored)
 
@@ -85,7 +89,7 @@ cmd_init() {
     "~/.agents/rules/global/        (shared rules for all agents)" \
     "~/.agents/settings/global/     (shared settings)" \
     "~/.agents/mcp/global/          (shared MCP configs)" \
-    "~/.agents/commands/            (custom commands)" \
+    "~/.agents/skills/global/       (shared skills, directory-based)" \
     "~/.agents/scripts/             (utility scripts)" \
     "~/.agents/local/               (machine-specific, gitignored)"
 
@@ -94,7 +98,10 @@ cmd_init() {
     "~/.agents/README.md            (documentation)" \
     "~/.agents/.gitignore           (git ignore patterns)" \
     "~/.agents/rules/global/rules.mdc (starter rules)" \
-    "~/.agents/settings/global/claude-code.json (hooks, permissions)"
+    "~/.agents/settings/global/claude-code.json (hooks, permissions)" \
+    "~/.agents/skills/global/agent-start/SKILL.md (session start)" \
+    "~/.agents/skills/global/agent-handoff/SKILL.md (session handoff)" \
+    "~/.agents/skills/global/self-review/SKILL.md (pre-commit checklist)"
 
   info_box "Tip" \
     "This directory should be version controlled." \
@@ -127,7 +134,9 @@ cmd_init() {
     "$agents_home/rules/global"
     "$agents_home/settings/global"
     "$agents_home/mcp/global"
-    "$agents_home/commands"
+    "$agents_home/skills/global/agent-start"
+    "$agents_home/skills/global/agent-handoff"
+    "$agents_home/skills/global/self-review"
     "$agents_home/scripts"
     "$agents_home/local"
   )
@@ -144,6 +153,12 @@ cmd_init() {
   create_file_from_template_silent "$templates_dir/rules/global/rules.mdc" "$agents_home/rules/global/rules.mdc"
   create_file_from_template_silent "$templates_dir/settings/global/claude-code.json" "$agents_home/settings/global/claude-code.json"
   bullet "ok" "Created template files"
+
+  # Copy skill templates (directory-based)
+  create_file_from_template_silent "$templates_dir/skills/global/agent-start/SKILL.md" "$agents_home/skills/global/agent-start/SKILL.md"
+  create_file_from_template_silent "$templates_dir/skills/global/agent-handoff/SKILL.md" "$agents_home/skills/global/agent-handoff/SKILL.md"
+  create_file_from_template_silent "$templates_dir/skills/global/self-review/SKILL.md" "$agents_home/skills/global/self-review/SKILL.md"
+  bullet "ok" "Created skill templates"
 
   # Create XDG state directory
   mkdir -p "$AGENTS_STATE_DIR"

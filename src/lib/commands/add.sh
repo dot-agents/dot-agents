@@ -39,6 +39,7 @@ ${BOLD}DESCRIPTION${NC}
     ${BOLD}Claude Code${NC} (uses SYMLINKS):
     - CLAUDE.md                Project instructions
     - .claude/settings.local.json  Project settings
+    - .claude/skills/          Commands as skills (global + project)
     - .mcp.json                MCP server configs
 
     ${BOLD}Codex CLI${NC} (uses SYMLINKS):
@@ -186,17 +187,21 @@ cmd_add() {
     "rules/$project_name/              (project rules)" \
     "settings/$project_name/           (project settings)" \
     "  └── claude-code.json            (hooks, permissions)" \
-    "mcp/$project_name/                (project MCP configs)"
+    "mcp/$project_name/                (project MCP configs)" \
+    "skills/$project_name/             (project skills)"
 
   preview_section "$display_path/" \
     ".cursor/rules/global--*.mdc       (hard links to global rules)" \
     ".cursor/settings.json             (hard link to settings)" \
     ".cursor/mcp.json                  (hard link to MCP config)" \
+    ".cursor/commands/*.md             (symlinks to skills)" \
     ".cursorignore                     (hard link to ignore patterns)" \
     "CLAUDE.md                         (symlink to rules)" \
     ".claude/settings.local.json       (symlink to settings)" \
+    ".claude/skills/*/                 (symlinks to skill directories)" \
     ".mcp.json                         (symlink to MCP config)" \
     "AGENTS.md                         (symlink to rules)" \
+    ".codex/skills/*/                  (symlinks to skill directories)" \
     ".opencode/                        (symlinks to configs)"
 
   info_box "About Link Types" \
@@ -324,9 +329,17 @@ cmd_add() {
   claude_create_links "$project_name" "$project_path"
   bullet "ok" "Claude Code links (symlinks)"
 
+  # Claude Code: Skills symlinks (global and project skills)
+  claude_create_skills_links "$project_name" "$project_path"
+  bullet "ok" "Claude Code skills (directory symlinks)"
+
   # Codex: AGENTS.md symlink
   codex_create_links "$project_name" "$project_path"
   bullet "ok" "Codex links (symlinks)"
+
+  # Codex: Skills symlinks (global and project skills)
+  codex_create_skills_links "$project_name" "$project_path"
+  bullet "ok" "Codex skills (directory symlinks)"
 
   # OpenCode: .opencode/ symlinks
   opencode_create_links "$project_name" "$project_path"
@@ -359,7 +372,7 @@ create_project_dirs_silent() {
   mkdir -p "$agents_home/rules/$project"
   mkdir -p "$agents_home/settings/$project"
   mkdir -p "$agents_home/mcp/$project"
-  mkdir -p "$agents_home/commands/$project"
+  mkdir -p "$agents_home/skills/$project"
 }
 
 # Create project directories in ~/.agents/ (verbose version)
@@ -371,7 +384,7 @@ create_project_dirs() {
     "$agents_home/rules/$project"
     "$agents_home/settings/$project"
     "$agents_home/mcp/$project"
-    "$agents_home/commands/$project"
+    "$agents_home/skills/$project"
   )
 
   for dir in "${dirs[@]}"; do
@@ -398,21 +411,33 @@ setup_project_links() {
   # Use platform modules for linking (sourced via core.sh)
   if [ "$DRY_RUN" = true ]; then
     log_dry "Create Cursor hard links in .cursor/ (rules, settings, MCP, ignore)"
+    log_dry "Create Cursor commands symlinks (.cursor/commands/)"
     log_dry "Create Claude Code symlinks (CLAUDE.md, .claude/, .mcp.json)"
+    log_dry "Create Claude Code skills symlinks (.claude/skills/)"
     log_dry "Create Codex symlinks (AGENTS.md, .codex/)"
+    log_dry "Create Codex skills symlinks (.codex/skills/)"
     log_dry "Create OpenCode symlinks (.opencode/)"
   else
-    # Cursor: .cursor/ with HARD LINKS (Cursor doesn't follow symlinks)
+    # Cursor: .cursor/ with HARD LINKS (Cursor doesn't follow symlinks for rules)
+    # Also creates .cursor/commands/ with symlinks (Cursor may follow symlinks for commands)
     cursor_create_all_links "$project" "$repo"
-    log_create ".cursor/ configs (hard links)"
+    log_create ".cursor/ configs (hard links + command symlinks)"
 
     # Claude Code: CLAUDE.md and settings symlinks
     claude_create_links "$project" "$repo"
     log_create "Claude Code links (symlinks)"
 
+    # Claude Code: Skills symlinks (global and project skills - directory-based)
+    claude_create_skills_links "$project" "$repo"
+    log_create "Claude Code skills (directory symlinks)"
+
     # Codex: AGENTS.md symlink
     codex_create_links "$project" "$repo"
     log_create "Codex links (symlinks)"
+
+    # Codex: Skills symlinks (global and project skills - directory-based)
+    codex_create_skills_links "$project" "$repo"
+    log_create "Codex skills (directory symlinks)"
 
     # OpenCode: .opencode/ symlinks
     opencode_create_links "$project" "$repo"

@@ -161,6 +161,60 @@ run_doctor_text() {
   fi
 
   echo ""
+  log_section "Skills"
+
+  # Check global skills (directory-based)
+  local global_skills="$AGENTS_HOME/skills/global"
+  if [ -d "$global_skills" ]; then
+    local skill_count=0
+    for skill_dir in "$global_skills"/*/; do
+      [ -d "$skill_dir" ] || continue
+      [ -f "$skill_dir/SKILL.md" ] && ((skill_count++)) || true
+    done
+
+    if [ "$skill_count" -gt 0 ]; then
+      echo -e "  ${GREEN}✓${NC} Global skills: $skill_count found"
+      ((checks_passed++)) || true
+    else
+      echo -e "  ${YELLOW}○${NC} Global skills: directory exists but empty"
+      echo -e "      ${DIM}→ Run 'dot-agents init --force' to create templates${NC}"
+    fi
+  else
+    echo -e "  ${YELLOW}○${NC} Global skills: not found"
+    echo -e "      ${DIM}→ Run 'dot-agents init' to create${NC}"
+  fi
+
+  # Check project skills symlinks
+  if [ -f "$AGENTS_HOME/config.json" ] && has_jq; then
+    local projects
+    projects=$(jq -r '.projects | keys[]' "$AGENTS_HOME/config.json" 2>/dev/null)
+
+    for project in $projects; do
+      local project_path
+      project_path=$(jq -r ".projects[\"$project\"].path" "$AGENTS_HOME/config.json")
+      project_path=$(expand_path "$project_path")
+
+      [ -d "$project_path" ] || continue
+
+      local skills_dir="$project_path/.claude/skills"
+      if [ -d "$skills_dir" ]; then
+        local skill_count=0
+        for skill in "$skills_dir"/*/; do
+          [ -d "$skill" ] || [ -L "$skill" ] && ((skill_count++)) || true
+        done
+        if [ "$skill_count" -gt 0 ]; then
+          echo -e "  ${GREEN}✓${NC} $project: $skill_count skill(s) linked"
+        else
+          echo -e "  ${YELLOW}○${NC} $project: .claude/skills/ empty"
+          echo -e "      ${DIM}→ dot-agents link${NC}"
+        fi
+      else
+        echo -e "  ${GRAY}○${NC} $project: no .claude/skills/"
+      fi
+    done
+  fi
+
+  echo ""
   log_section "Directory Structure"
 
   # Check key directories exist
@@ -168,7 +222,7 @@ run_doctor_text() {
     "rules/global"
     "settings/global"
     "mcp/global"
-    "commands"
+    "skills/global"
     "scripts"
     "local"
   )

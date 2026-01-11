@@ -140,7 +140,7 @@ cursor_create_ignore_link() {
   fi
 }
 
-# Create all Cursor links (rules, settings, MCP, ignore)
+# Create all Cursor links (rules, settings, MCP, ignore, commands)
 cursor_create_all_links() {
   local project="$1"
   local repo_path="$2"
@@ -149,4 +149,68 @@ cursor_create_all_links() {
   cursor_create_settings_links "$project" "$repo_path"
   cursor_create_mcp_links "$project" "$repo_path"
   cursor_create_ignore_link "$project" "$repo_path"
+  cursor_create_commands_links "$project" "$repo_path"
+}
+
+# Create commands symlinks for Cursor (directory-based skills → flat .md files)
+# Symlinks global and project skills' SKILL.md to .cursor/commands/{name}.md
+# Project skills override global skills with the same name (with warning)
+cursor_create_commands_links() {
+  local project="$1"
+  local repo_path="$2"
+
+  local commands_target="$repo_path/.cursor/commands"
+  local global_skills="$AGENTS_HOME/skills/global"
+  local project_skills="$AGENTS_HOME/skills/$project"
+
+  # Create commands directory
+  mkdir -p "$commands_target"
+
+  # Collect project skill names (for conflict detection)
+  local project_skill_names=""
+  if [ -d "$project_skills" ]; then
+    for skill_dir in "$project_skills"/*/; do
+      [ -d "$skill_dir" ] || continue
+      [ -f "$skill_dir/SKILL.md" ] || continue
+      local name
+      name=$(basename "$skill_dir")
+      project_skill_names="$project_skill_names $name "
+    done
+  fi
+
+  # Symlink global skills' SKILL.md (no prefix, skip if shadowed by project skill)
+  if [ -d "$global_skills" ]; then
+    for skill_dir in "$global_skills"/*/; do
+      [ -d "$skill_dir" ] || continue
+      [ -f "$skill_dir/SKILL.md" ] || continue
+      local name
+      name=$(basename "$skill_dir")
+      local skill_file="$skill_dir/SKILL.md"
+      local target="$commands_target/$name.md"
+
+      # Check if project has a skill with the same name
+      if [[ "$project_skill_names" == *" $name "* ]]; then
+        # Project skill shadows global - warn and skip
+        echo -e "  ${YELLOW}⚠${NC}  Skill '$name' shadows global skill (project overrides global)" >&2
+        continue
+      fi
+
+      # Symlink SKILL.md to {name}.md (Cursor uses flat files)
+      [ -e "$target" ] || [ -L "$target" ] || ln -sf "$skill_file" "$target"
+    done
+  fi
+
+  # Symlink project skills' SKILL.md (no prefix)
+  if [ -d "$project_skills" ]; then
+    for skill_dir in "$project_skills"/*/; do
+      [ -d "$skill_dir" ] || continue
+      [ -f "$skill_dir/SKILL.md" ] || continue
+      local name
+      name=$(basename "$skill_dir")
+      local skill_file="$skill_dir/SKILL.md"
+      local target="$commands_target/$name.md"
+      # Symlink SKILL.md to {name}.md
+      [ -e "$target" ] || [ -L "$target" ] || ln -sf "$skill_file" "$target"
+    done
+  fi
 }

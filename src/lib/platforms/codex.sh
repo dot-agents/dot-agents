@@ -61,3 +61,64 @@ codex_deprecated_details() {
   # Codex has no deprecated formats
   echo ""
 }
+
+# Create skills symlinks for Codex CLI (directory-based)
+# Symlinks global and project skills to .codex/skills/ so they work as slash commands
+# Project skills override global skills with the same name (with warning)
+codex_create_skills_links() {
+  local project="$1"
+  local repo_path="$2"
+
+  local skills_target="$repo_path/.codex/skills"
+  local global_skills="$AGENTS_HOME/skills/global"
+  local project_skills="$AGENTS_HOME/skills/$project"
+
+  # Create skills directory
+  mkdir -p "$skills_target"
+
+  # Collect project skill names (for conflict detection)
+  local project_skill_names=""
+  if [ -d "$project_skills" ]; then
+    for skill_dir in "$project_skills"/*/; do
+      [ -d "$skill_dir" ] || continue
+      [ -f "$skill_dir/SKILL.md" ] || continue
+      local name
+      name=$(basename "$skill_dir")
+      project_skill_names="$project_skill_names $name "
+    done
+  fi
+
+  # Symlink global skills (no prefix, skip if shadowed by project skill)
+  if [ -d "$global_skills" ]; then
+    for skill_dir in "$global_skills"/*/; do
+      [ -d "$skill_dir" ] || continue
+      [ -f "$skill_dir/SKILL.md" ] || continue
+      local name
+      name=$(basename "$skill_dir")
+      local target="$skills_target/$name"
+
+      # Check if project has a skill with the same name
+      if [[ "$project_skill_names" == *" $name "* ]]; then
+        # Project skill shadows global - warn and skip
+        echo -e "  ${YELLOW}⚠${NC}  Skill '$name' shadows global skill (project overrides global)" >&2
+        continue
+      fi
+
+      # Only create if doesn't exist
+      [ -e "$target" ] || [ -L "$target" ] || ln -sf "$skill_dir" "$target"
+    done
+  fi
+
+  # Symlink project skills (no prefix)
+  if [ -d "$project_skills" ]; then
+    for skill_dir in "$project_skills"/*/; do
+      [ -d "$skill_dir" ] || continue
+      [ -f "$skill_dir/SKILL.md" ] || continue
+      local name
+      name=$(basename "$skill_dir")
+      local target="$skills_target/$name"
+      # Only create if doesn't exist
+      [ -e "$target" ] || [ -L "$target" ] || ln -sf "$skill_dir" "$target"
+    done
+  fi
+}
