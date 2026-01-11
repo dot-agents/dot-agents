@@ -20,17 +20,32 @@ ${BOLD}OPTIONS${NC}
     --help, -h        Show this help
 
 ${BOLD}DESCRIPTION${NC}
-    Registers a project with dot-agents and sets up configuration symlinks.
+    Registers a project with dot-agents and sets up configuration links.
+    Existing config files are backed up before being replaced.
 
-    Creates:
-    - ~/.agents/rules/<project>/         Project-specific rules
-    - ~/.agents/settings/<project>/      Project settings
-    - ~/.agents/mcp/<project>/           Project MCP configs
+    Creates in ~/.agents/:
+    - rules/<project>/         Project-specific rules
+    - settings/<project>/      Project settings
+    - mcp/<project>/           Project MCP configs
 
-    Links (in project directory):
-    - .cursor/rules/                     Hard links to rules (Cursor)
-    - .claude/                           Symlink to settings (Claude Code)
-    - CLAUDE.md                          Symlink to rules (Claude Code)
+    Links created in project directory:
+
+    ${BOLD}Cursor${NC} (uses HARD LINKS - required by IDE):
+    - .cursor/rules/           Global and project rules
+    - .cursor/settings.json    IDE settings
+    - .cursor/mcp.json         MCP server configs
+    - .cursorignore            Files to ignore
+
+    ${BOLD}Claude Code${NC} (uses SYMLINKS):
+    - CLAUDE.md                Project instructions
+    - .claude/settings.local.json  Project settings
+    - .mcp.json                MCP server configs
+
+    ${BOLD}Codex CLI${NC} (uses SYMLINKS):
+    - AGENTS.md                Project instructions
+
+    ${BOLD}OpenCode${NC} (uses SYMLINKS):
+    - .opencode/               Config directory
 
 ${BOLD}EXAMPLES${NC}
     dot-agents add ~/Github/myproject
@@ -170,17 +185,84 @@ cmd_add() {
   preview_section "~/.agents/" \
     "rules/$project_name/              (project rules)" \
     "settings/$project_name/           (project settings)" \
+    "  └── claude-code.json            (hooks, permissions)" \
     "mcp/$project_name/                (project MCP configs)"
 
   preview_section "$display_path/" \
     ".cursor/rules/global--*.mdc       (hard links to global rules)" \
+    ".cursor/settings.json             (hard link to settings)" \
+    ".cursor/mcp.json                  (hard link to MCP config)" \
+    ".cursorignore                     (hard link to ignore patterns)" \
     "CLAUDE.md                         (symlink to rules)" \
+    ".claude/settings.local.json       (symlink to settings)" \
+    ".mcp.json                         (symlink to MCP config)" \
     "AGENTS.md                         (symlink to rules)" \
     ".opencode/                        (symlinks to configs)"
 
   info_box "About Link Types" \
     "Cursor uses HARD LINKS (required by IDE)." \
     "Other agents use symlinks for flexibility."
+
+  # Check for existing files that would be replaced (root-level only)
+  local existing_files=()
+  check_existing_config_files "$project_path" existing_files
+
+  # Exhaustively scan for all AI config files in the repo
+  local all_ai_configs=()
+  scan_existing_ai_configs "$project_path" all_ai_configs
+
+  # Separate files that will be replaced vs. discovered elsewhere
+  local discovered_elsewhere=()
+  for config in "${all_ai_configs[@]}"; do
+    local is_root_file=false
+    for root_file in "${existing_files[@]}"; do
+      if [ "$config" = "$root_file" ]; then
+        is_root_file=true
+        break
+      fi
+    done
+    if [ "$is_root_file" = false ]; then
+      discovered_elsewhere+=("$config")
+    fi
+  done
+
+  # Show files that will be replaced
+  if [ ${#existing_files[@]} -gt 0 ]; then
+    echo ""
+    log_section "Files to Replace"
+    echo -e "  ${YELLOW}These root-level files will be backed up and replaced with links:${NC}"
+    for file in "${existing_files[@]}"; do
+      local display_file="${file#$project_path/}"
+      local file_type="file"
+      [ -L "$file" ] && file_type="symlink"
+      echo -e "  ${YELLOW}!${NC} $display_file ${DIM}($file_type)${NC}"
+    done
+
+    if [ "$FORCE" != true ]; then
+      echo ""
+      echo -e "  ${DIM}Backups will be created as *.dot-agents-backup${NC}"
+    fi
+  fi
+
+  # Show discovered configs elsewhere in the repo (informational)
+  if [ ${#discovered_elsewhere[@]} -gt 0 ]; then
+    echo ""
+    log_section "Other AI Configs Discovered"
+    echo -e "  ${CYAN}Found AI agent configs elsewhere in the repo (not replaced):${NC}"
+    local shown=0
+    for file in "${discovered_elsewhere[@]}"; do
+      if [ $shown -lt 10 ]; then
+        local display_file="${file#$project_path/}"
+        echo -e "  ${CYAN}○${NC} $display_file"
+        ((shown++))
+      fi
+    done
+    if [ ${#discovered_elsewhere[@]} -gt 10 ]; then
+      echo -e "  ${DIM}... and $((${#discovered_elsewhere[@]} - 10)) more${NC}"
+    fi
+    echo ""
+    echo -e "  ${DIM}Consider migrating these to ~/.agents/ for centralized management.${NC}"
+  fi
 
   # Handle dry-run mode
   if [ "$DRY_RUN" = true ]; then
@@ -190,9 +272,26 @@ cmd_add() {
   fi
 
   # Confirm before proceeding
-  if ! confirm_action "Proceed?"; then
+  local confirm_msg="Proceed?"
+  if [ ${#existing_files[@]} -gt 0 ]; then
+    confirm_msg="Proceed? (${#existing_files[@]} file(s) will be backed up and replaced)"
+  fi
+
+  if ! confirm_action "$confirm_msg"; then
     log_info "Add cancelled."
     return 0
+  fi
+
+  # Backup existing files before replacing
+  if [ ${#existing_files[@]} -gt 0 ]; then
+    for file in "${existing_files[@]}"; do
+      if [ -e "$file" ] && [ ! -L "$file" ]; then
+        mv "$file" "$file.dot-agents-backup"
+      elif [ -L "$file" ]; then
+        rm "$file"  # Remove existing symlinks without backup
+      fi
+    done
+    bullet "ok" "Backed up ${#existing_files[@]} existing file(s)"
   fi
 
   # Step 3: Create project structure
@@ -200,12 +299,20 @@ cmd_add() {
   create_project_dirs_silent "$project_name"
   bullet "ok" "Created ~/.agents/ directories"
 
+  # Copy project settings template if it doesn't exist
+  local templates_dir="$SHARE_DIR/templates/standard"
+  local project_settings="$AGENTS_HOME/settings/$project_name/claude-code.json"
+  if [ ! -f "$project_settings" ]; then
+    cp "$templates_dir/settings/project/claude-code.json" "$project_settings" 2>/dev/null || true
+    bullet "ok" "Created project settings template"
+  fi
+
   # Step 4: Link to project
   step "Linking to project..."
 
-  # Cursor: .cursor/rules/ with HARD LINKS
-  cursor_create_rule_links "$project_name" "$project_path"
-  bullet "ok" ".cursor/rules/ (hard links)"
+  # Cursor: .cursor/ with HARD LINKS (rules, settings, MCP, ignore)
+  cursor_create_all_links "$project_name" "$project_path"
+  bullet "ok" ".cursor/ configs (hard links)"
 
   # Claude Code: CLAUDE.md and settings symlinks
   claude_create_links "$project_name" "$project_path"
@@ -284,14 +391,14 @@ setup_project_links() {
 
   # Use platform modules for linking (sourced via core.sh)
   if [ "$DRY_RUN" = true ]; then
-    log_dry "Create Cursor hard links in .cursor/rules/"
-    log_dry "Create Claude Code symlinks (CLAUDE.md, .claude/)"
+    log_dry "Create Cursor hard links in .cursor/ (rules, settings, MCP, ignore)"
+    log_dry "Create Claude Code symlinks (CLAUDE.md, .claude/, .mcp.json)"
     log_dry "Create Codex symlinks (AGENTS.md, .codex/)"
     log_dry "Create OpenCode symlinks (.opencode/)"
   else
-    # Cursor: .cursor/rules/ with HARD LINKS (Cursor doesn't follow symlinks)
-    cursor_create_rule_links "$project" "$repo"
-    log_create ".cursor/rules/ (hard links)"
+    # Cursor: .cursor/ with HARD LINKS (Cursor doesn't follow symlinks)
+    cursor_create_all_links "$project" "$repo"
+    log_create ".cursor/ configs (hard links)"
 
     # Claude Code: CLAUDE.md and settings symlinks
     claude_create_links "$project" "$repo"
@@ -334,3 +441,115 @@ check_deprecated_formats() {
 #   claude_create_links() from platforms/claude-code.sh
 #   codex_create_links() from platforms/codex.sh
 #   opencode_create_links() from platforms/opencode.sh
+
+# Check for existing config files that would be replaced by linking
+# Usage: check_existing_config_files "/path/to/project" array_name
+check_existing_config_files() {
+  local project_path="$1"
+  local -n result_array="$2"
+
+  # Root-level files that would be directly replaced
+  local root_files=(
+    "$project_path/.cursor/rules"
+    "$project_path/.cursor/settings.json"
+    "$project_path/.cursor/mcp.json"
+    "$project_path/.cursorignore"
+    "$project_path/CLAUDE.md"
+    "$project_path/.claude/settings.local.json"
+    "$project_path/.mcp.json"
+    "$project_path/AGENTS.md"
+    "$project_path/.codex/instructions.md"
+    "$project_path/.opencode/instructions.md"
+    "$project_path/.opencode/config.json"
+  )
+
+  for file in "${root_files[@]}"; do
+    if [ -e "$file" ] || [ -L "$file" ]; then
+      if [ -d "$file" ]; then
+        # Check for files inside directories
+        for subfile in "$file"/*; do
+          [ -e "$subfile" ] && result_array+=("$subfile")
+        done
+      else
+        result_array+=("$file")
+      fi
+    fi
+  done
+}
+
+# Exhaustively scan for AI agent config files throughout the repo
+# Returns files that might indicate existing AI agent configurations
+# Usage: scan_existing_ai_configs "/path/to/project" array_name
+scan_existing_ai_configs() {
+  local project_path="$1"
+  local -n result_array="$2"
+
+  # Use find to locate files, excluding common directories
+  local exclude_dirs=".git node_modules vendor dist build __pycache__ .venv venv"
+  local exclude_args=""
+  for dir in $exclude_dirs; do
+    exclude_args="$exclude_args -path '*/$dir/*' -prune -o"
+  done
+
+  # File patterns to look for (these are AI agent config files)
+  local patterns=(
+    # Cursor ecosystem
+    ".cursorrules"
+    ".cursor/rules/*.mdc"
+    ".cursor/rules/*.md"
+    ".cursor/settings.json"
+    ".cursor/mcp.json"
+    ".cursorignore"
+    # Claude Code ecosystem
+    "CLAUDE.md"
+    ".claude/settings.json"
+    ".claude/settings.local.json"
+    ".claude.json"
+    ".mcp.json"
+    # Codex ecosystem
+    "AGENTS.md"
+    ".codex/instructions.md"
+    ".codex/config.json"
+    "codex.md"
+    # OpenCode ecosystem
+    ".opencode/instructions.md"
+    ".opencode/config.json"
+    "OPENCODE.md"
+    # Aider
+    ".aider*"
+    "aider.conf*"
+    # Windsurf/Continue
+    ".continue/*"
+    ".windsurfrules"
+    # GitHub Copilot
+    ".github/copilot-instructions.md"
+    "copilot-instructions.md"
+    # Generic AI rules
+    ".ai-rules"
+    ".ai-instructions"
+  )
+
+  # Search for each pattern
+  for pattern in "${patterns[@]}"; do
+    while IFS= read -r -d '' file; do
+      result_array+=("$file")
+    done < <(find "$project_path" \
+      -path '*/.git/*' -prune -o \
+      -path '*/node_modules/*' -prune -o \
+      -path '*/vendor/*' -prune -o \
+      -path '*/dist/*' -prune -o \
+      -path '*/build/*' -prune -o \
+      -path '*/__pycache__/*' -prune -o \
+      -path '*/.venv/*' -prune -o \
+      -path '*/venv/*' -prune -o \
+      -name "$pattern" -print0 2>/dev/null)
+  done
+
+  # Also check for glob patterns that need special handling
+  while IFS= read -r -d '' file; do
+    result_array+=("$file")
+  done < <(find "$project_path" \
+    -path '*/.git/*' -prune -o \
+    -path '*/node_modules/*' -prune -o \
+    -type f \( -name ".aider*" -o -name "aider.conf*" \) -print0 2>/dev/null)
+}

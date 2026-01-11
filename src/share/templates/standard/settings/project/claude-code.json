@@ -1,0 +1,8 @@
+{
+  "$schema": "https://dot-agents.dev/schemas/claude-code-settings.json",
+  "permissions": {
+    "allow": [],
+    "deny": []
+  },
+  "hooks": {}
+}

@@ -106,6 +106,61 @@ run_doctor_text() {
   detect_agent_platform "OpenCode" opencode_is_installed opencode_version
 
   echo ""
+  log_section "Global Settings"
+
+  # Check Claude Code global settings status
+  local claude_status
+  claude_status=$(claude_global_settings_status)
+  case "$claude_status" in
+    managed)
+      echo -e "  ${GREEN}✓${NC} Claude Code: ~/.claude/settings.json ${DIM}(managed by dot-agents)${NC}"
+      ((checks_passed++)) || true
+      ;;
+    unmanaged_file)
+      echo -e "  ${YELLOW}○${NC} Claude Code: ~/.claude/settings.json ${DIM}(exists, not managed)${NC}"
+      echo -e "      ${DIM}→ To manage: dot-agents link claude-global${NC}"
+      ;;
+    not_found)
+      echo -e "  ${GRAY}○${NC} Claude Code: ~/.claude/settings.json ${DIM}(not found)${NC}"
+      ;;
+    symlink_other:*)
+      local target="${claude_status#symlink_other:}"
+      echo -e "  ${YELLOW}○${NC} Claude Code: ~/.claude/settings.json ${DIM}(symlink to $target)${NC}"
+      ;;
+  esac
+
+  echo ""
+  log_section "Hooks Configuration"
+
+  # Check global hooks settings
+  local global_settings="$AGENTS_HOME/settings/global/claude-code.json"
+  if [ -f "$global_settings" ]; then
+    # Validate JSON syntax
+    if jq -e '.' "$global_settings" >/dev/null 2>&1; then
+      local hook_count=0
+      for hook_type in PreToolUse PostToolUse PreRequest PostRequest; do
+        local count
+        count=$(jq -r ".hooks.$hook_type | length" "$global_settings" 2>/dev/null || echo "0")
+        hook_count=$((hook_count + count))
+      done
+
+      if [ "$hook_count" -gt 0 ]; then
+        echo -e "  ${GREEN}✓${NC} Global hooks: $hook_count hook(s) configured"
+        ((checks_passed++)) || true
+      else
+        echo -e "  ${GRAY}○${NC} Global hooks: none configured"
+      fi
+    else
+      echo -e "  ${RED}✗${NC} Global settings: invalid JSON syntax"
+      echo -e "      ${DIM}→ Check ~/.agents/settings/global/claude-code.json${NC}"
+      ((checks_failed++)) || true
+    fi
+  else
+    echo -e "  ${YELLOW}○${NC} Global settings: not found"
+    echo -e "      ${DIM}→ Run 'dot-agents init' to create${NC}"
+  fi
+
+  echo ""
   log_section "Directory Structure"
 
   # Check key directories exist

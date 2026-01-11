@@ -68,3 +68,97 @@ claude_deprecated_details() {
     echo ".claude.json → .claude/settings.json"
   fi
 }
+
+# Check if global Claude settings are managed by dot-agents
+claude_global_settings_managed() {
+  local claude_settings="$HOME/.claude/settings.json"
+  local agents_settings="$AGENTS_HOME/settings/global/claude-code-global.json"
+
+  # Check if settings.json is a symlink pointing to our managed file
+  if [ -L "$claude_settings" ]; then
+    local target
+    target=$(readlink "$claude_settings" 2>/dev/null)
+    [ "$target" = "$agents_settings" ]
+  else
+    return 1
+  fi
+}
+
+# Set up global Claude settings management
+# Creates symlink from ~/.claude/settings.json → ~/.agents/settings/global/claude-code-global.json
+claude_setup_global_settings() {
+  local force="${1:-false}"
+  local claude_dir="$HOME/.claude"
+  local claude_settings="$claude_dir/settings.json"
+  local agents_settings="$AGENTS_HOME/settings/global/claude-code-global.json"
+
+  # Create ~/.claude directory if needed
+  mkdir -p "$claude_dir"
+
+  # Create ~/.agents/settings/global if needed
+  mkdir -p "$AGENTS_HOME/settings/global"
+
+  # Handle existing settings.json
+  if [ -e "$claude_settings" ]; then
+    if [ -L "$claude_settings" ]; then
+      # Already a symlink
+      local target
+      target=$(readlink "$claude_settings" 2>/dev/null)
+      if [ "$target" = "$agents_settings" ]; then
+        echo "already_managed"
+        return 0
+      else
+        # Symlink points elsewhere
+        if [ "$force" = true ]; then
+          rm "$claude_settings"
+        else
+          echo "symlink_conflict:$target"
+          return 1
+        fi
+      fi
+    else
+      # Regular file exists
+      if [ "$force" = true ]; then
+        # Backup and migrate
+        if [ ! -f "$agents_settings" ]; then
+          cp "$claude_settings" "$agents_settings"
+        fi
+        mv "$claude_settings" "$claude_settings.backup"
+        echo "migrated"
+      else
+        echo "file_exists"
+        return 1
+      fi
+    fi
+  fi
+
+  # Create the managed settings file if it doesn't exist
+  if [ ! -f "$agents_settings" ]; then
+    echo '{}' > "$agents_settings"
+  fi
+
+  # Create symlink
+  ln -sf "$agents_settings" "$claude_settings"
+  echo "linked"
+  return 0
+}
+
+# Get Claude global settings status
+claude_global_settings_status() {
+  local claude_settings="$HOME/.claude/settings.json"
+  local agents_settings="$AGENTS_HOME/settings/global/claude-code-global.json"
+
+  if [ ! -e "$claude_settings" ]; then
+    echo "not_found"
+  elif [ -L "$claude_settings" ]; then
+    local target
+    target=$(readlink "$claude_settings" 2>/dev/null)
+    if [ "$target" = "$agents_settings" ]; then
+      echo "managed"
+    else
+      echo "symlink_other:$target"
+    fi
+  else
+    echo "unmanaged_file"
+  fi
+}

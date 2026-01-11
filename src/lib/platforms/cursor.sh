@@ -84,3 +84,69 @@ cursor_deprecated_details() {
     echo ".cursorrules → .cursor/rules/*.mdc"
   fi
 }
+
+# Create links for Cursor settings (HARD LINKS)
+cursor_create_settings_links() {
+  local project="$1"
+  local repo_path="$2"
+
+  mkdir -p "$repo_path/.cursor"
+
+  # Project-specific settings take priority
+  if [ -f "$AGENTS_HOME/settings/$project/cursor.json" ]; then
+    ln -f "$AGENTS_HOME/settings/$project/cursor.json" "$repo_path/.cursor/settings.json" 2>/dev/null || true
+    return 0
+  fi
+
+  # Fall back to global settings
+  if [ -f "$AGENTS_HOME/settings/global/cursor.json" ]; then
+    ln -f "$AGENTS_HOME/settings/global/cursor.json" "$repo_path/.cursor/settings.json" 2>/dev/null || true
+  fi
+}
+
+# Create links for Cursor MCP config (HARD LINKS)
+cursor_create_mcp_links() {
+  local project="$1"
+  local repo_path="$2"
+
+  mkdir -p "$repo_path/.cursor"
+
+  # Project-specific MCP config takes priority
+  if [ -f "$AGENTS_HOME/mcp/$project/cursor.json" ]; then
+    ln -f "$AGENTS_HOME/mcp/$project/cursor.json" "$repo_path/.cursor/mcp.json" 2>/dev/null || true
+    return 0
+  fi
+
+  # Fall back to global MCP config
+  if [ -f "$AGENTS_HOME/mcp/global/cursor.json" ]; then
+    ln -f "$AGENTS_HOME/mcp/global/cursor.json" "$repo_path/.cursor/mcp.json" 2>/dev/null || true
+  fi
+}
+
+# Create .cursorignore link (HARD LINK)
+cursor_create_ignore_link() {
+  local project="$1"
+  local repo_path="$2"
+
+  # Project-specific ignore file takes priority
+  if [ -f "$AGENTS_HOME/settings/$project/cursorignore" ]; then
+    ln -f "$AGENTS_HOME/settings/$project/cursorignore" "$repo_path/.cursorignore" 2>/dev/null || true
+    return 0
+  fi
+
+  # Fall back to global ignore file
+  if [ -f "$AGENTS_HOME/settings/global/cursorignore" ]; then
+    ln -f "$AGENTS_HOME/settings/global/cursorignore" "$repo_path/.cursorignore" 2>/dev/null || true
+  fi
+}
+
+# Create all Cursor links (rules, settings, MCP, ignore)
+cursor_create_all_links() {
+  local project="$1"
+  local repo_path="$2"
+
+  cursor_create_rule_links "$project" "$repo_path"
+  cursor_create_settings_links "$project" "$repo_path"
+  cursor_create_mcp_links "$project" "$repo_path"
+  cursor_create_ignore_link "$project" "$repo_path"
+}

@@ -38,6 +38,7 @@ ${BOLD}CORE COMMANDS${NC}
     remove <project>  Remove a project from dot-agents management
     status            Show managed projects and their status
     doctor            Check health of dot-agents installation
+    hooks             Manage Claude Code hooks configuration
     audit             Show which configs are applied where
     redundancy        Check for duplicate/redundant rules
     migrate           Migrate deprecated config formats

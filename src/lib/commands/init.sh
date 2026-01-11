@@ -93,7 +93,8 @@ cmd_init() {
     "~/.agents/config.json          (project registry)" \
     "~/.agents/README.md            (documentation)" \
     "~/.agents/.gitignore           (git ignore patterns)" \
-    "~/.agents/rules/global/rules.mdc (starter rules)"
+    "~/.agents/rules/global/rules.mdc (starter rules)" \
+    "~/.agents/settings/global/claude-code.json (hooks, permissions)"
 
   info_box "Tip" \
     "This directory should be version controlled." \
@@ -141,6 +142,7 @@ cmd_init() {
   create_file_from_template_silent "$templates_dir/README.md" "$agents_home/README.md"
   create_file_from_template_silent "$templates_dir/.gitignore" "$agents_home/.gitignore"
   create_file_from_template_silent "$templates_dir/rules/global/rules.mdc" "$agents_home/rules/global/rules.mdc"
+  create_file_from_template_silent "$templates_dir/settings/global/claude-code.json" "$agents_home/settings/global/claude-code.json"
   bullet "ok" "Created template files"
 
   # Create XDG state directory
